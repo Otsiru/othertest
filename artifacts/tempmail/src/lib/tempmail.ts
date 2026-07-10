@@ -1,4 +1,4 @@
-const API_BASE = '/api/tempmail';
+const API_BASE = '/api/emailnator';
 
 // --- Types ---
 

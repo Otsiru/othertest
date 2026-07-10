@@ -156,8 +156,8 @@ function SlotCard({
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
           Slot {slot.id}
         </span>
-        <span className="text-[10px] font-mono text-cyan-600/60 bg-cyan-950/20 px-2 py-0.5 rounded-full border border-cyan-800/20">
-          tempmail.lol
+        <span className="text-[10px] font-mono text-amber-600/60 bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-800/20">
+          emailnator
         </span>
       </div>
 

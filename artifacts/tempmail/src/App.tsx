@@ -18,7 +18,7 @@ const NotFound = () => (
 
 const TIPS = [
   "Klik alamat email mana saja untuk menyalinnya seketika.",
-  "Semua email menggunakan domain yorki.site dengan inbox real-time.",
+  "Semua email menggunakan Emailnator (Gmail & domain acak) dengan inbox real-time.",
   "Biarkan tab ini terbuka saat menunggu email konfirmasi.",
   "Inbox bersifat sementara — simpan info penting di tempat lain.",
   "Gunakan slot berbeda untuk daftar di beberapa layanan sekaligus."

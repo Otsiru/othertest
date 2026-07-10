@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/tempmail-40/"
+title = "TopNod Email 40 Slots"
+version = "1.0.0"
+id = "artifacts/tempmail-40"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/tempmail-40/" ]
+localPort = 22648
+
+[services.development]
+run = "pnpm --filter @workspace/tempmail-40 run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tempmail-40", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tempmail-40/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22648"
+BASE_PATH = "/tempmail-40/"

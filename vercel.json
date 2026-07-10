@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/emailnator/(.*)",
+      "destination": "/api/emailnator.js"
+    },
+    {
+      "source": "/api/tempmail/(.*)",
+      "destination": "https://api.tempmail.lol/v2/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

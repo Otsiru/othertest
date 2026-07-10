@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "TempMail Generator"
+version = "1.0.0"
+id = "artifacts/tempmail"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18652
+
+[services.development]
+run = "pnpm --filter @workspace/tempmail run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tempmail", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tempmail/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18652"
+BASE_PATH = "/"

@@ -1,4 +1,24 @@
-const API_BASE = '/api/emailnator';
+const LOCAL_API_BASE = 'http://localhost:5000/api/tempmail';
+const REMOTE_API_BASE = '/api/emailnator';
+
+let activeApiBase = REMOTE_API_BASE;
+let hasCheckedBridge = false;
+
+const getApiBase = async (): Promise<string> => {
+  if (hasCheckedBridge) return activeApiBase;
+  try {
+    const res = await fetch('http://localhost:5000/api/health', { method: 'GET' });
+    if (res.ok) {
+      activeApiBase = LOCAL_API_BASE;
+      console.log('Using Local Telegram Bridge for temp-mail.org');
+    }
+  } catch (err) {
+    activeApiBase = REMOTE_API_BASE;
+    console.log('Local bridge not running, falling back to Vercel/Emailnator');
+  }
+  hasCheckedBridge = true;
+  return activeApiBase;
+};
 
 // --- Types ---
 
@@ -20,11 +40,11 @@ export type Email = {
 // --- API Functions ---
 
 /**
- * Create a new temporary inbox via TempMail.lol API.
- * Free tier: no API key required, inbox expires after 1 hour.
+ * Create a new temporary inbox via TempMail.lol API or Local Telegram Bridge.
  */
 export const createInbox = async (): Promise<InboxResponse> => {
-  const res = await fetch(`${API_BASE}/inbox/create`, {
+  const base = await getApiBase();
+  const res = await fetch(`${base}/inbox/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -33,11 +53,11 @@ export const createInbox = async (): Promise<InboxResponse> => {
 };
 
 /**
- * Check inbox for new emails using the token returned from createInbox.
- * Returns array of Email objects, or null if inbox has expired.
+ * Check inbox for new emails.
  */
 export const checkInbox = async (token: string): Promise<Email[] | null> => {
-  const res = await fetch(`${API_BASE}/inbox?token=${encodeURIComponent(token)}`);
+  const base = await getApiBase();
+  const res = await fetch(`${base}/inbox?token=${encodeURIComponent(token)}`);
   if (!res.ok) {
     if (res.status === 404) return null; // inbox expired
     throw new Error(`Failed to check inbox: ${res.status}`);

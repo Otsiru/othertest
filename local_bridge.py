@@ -45,6 +45,53 @@ client = TelegramClient('temp_mail_session', API_ID, API_HASH)
 # Event loop and lock references
 loop = None
 generation_lock = None
+received_emails = {}  # token -> list of email dicts
+
+@client.on(events.NewMessage(chats='tempmail_org_bot'))
+async def on_new_message(event):
+    text = event.message.text or ""
+    if "New email message" in text:
+        # Get the link from inline buttons
+        link = None
+        if event.message.buttons:
+            for row in event.message.buttons:
+                for button in row:
+                    if button.url:
+                        link = button.url
+                        break
+        if link and 'token=' in link:
+            try:
+                token = link.split('token=')[1].split('&')[0]
+                
+                # Extract details
+                sender = ""
+                subject = ""
+                lines = text.split('\n')
+                for line in lines:
+                    if line.startswith("From:"):
+                        sender = line.replace("From:", "").strip()
+                    elif line.startswith("Subject:"):
+                        subject = line.replace("Subject:", "").strip()
+                
+                import time
+                mapped_email = {
+                    'from': sender,
+                    'to': '',
+                    'subject': subject,
+                    'body': text,
+                    'html': None,
+                    'date': int(time.time() * 1000),
+                    'ip': '127.0.0.1'
+                }
+                
+                if token not in received_emails:
+                    received_emails[token] = []
+                # Avoid duplicates
+                if not any(e['subject'] == subject for e in received_emails[token]):
+                    received_emails[token].append(mapped_email)
+                    print(f"\n[BACKGROUND] Berhasil menangkap email baru untuk token {token[:10]}... | Subjek: {subject}")
+            except Exception as e:
+                print(f"\n[BACKGROUND ERROR] Gagal memproses email masuk: {e}")
 
 async def wait_for_new_email():
     """
@@ -224,7 +271,20 @@ class BridgeHTTPRequestHandler(BaseHTTPRequestHandler):
                 return
             
             token = token_list[0]
-            result = fetch_messages_from_api(token)
+            # Get background captured emails
+            local_emails = received_emails.get(token, [])
+            
+            # Fetch from temp-mail API (might return 401 for old tokens, but we still have local ones!)
+            api_res = fetch_messages_from_api(token)
+            api_emails = api_res.get('emails', []) if isinstance(api_res, dict) else []
+            
+            # Merge without duplicates by subject
+            combined = list(local_emails)
+            for api_m in api_emails:
+                if not any(loc_m['subject'] == api_m['subject'] for loc_m in combined):
+                    combined.append(api_m)
+            
+            result = {"emails": combined}
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')

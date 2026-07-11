@@ -75,7 +75,7 @@ async def wait_for_new_email():
                         words = line.split()
                         for word in words:
                             if "@" in word:
-                                email = word.strip("[](),. ")
+                                email = word.strip("[](),. *")
                                 break
                         if email:
                             break

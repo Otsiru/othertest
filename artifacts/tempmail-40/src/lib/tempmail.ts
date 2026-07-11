@@ -1,4 +1,4 @@
-const LOCAL_API_BASE = 'http://localhost:5000/api/tempmail';
+const LOCAL_API_BASE = 'http://127.0.0.1:5000/api/tempmail';
 const REMOTE_API_BASE = '/api/emailnator';
 
 let activeApiBase = REMOTE_API_BASE;
@@ -7,7 +7,7 @@ let hasCheckedBridge = false;
 const getApiBase = async (): Promise<string> => {
   if (hasCheckedBridge) return activeApiBase;
   try {
-    const res = await fetch('http://localhost:5000/api/health', { method: 'GET' });
+    const res = await fetch('http://127.0.0.1:5000/api/health', { method: 'GET' });
     if (res.ok) {
       activeApiBase = LOCAL_API_BASE;
       console.log('Using Local Telegram Bridge for temp-mail.org');
@@ -109,4 +109,12 @@ export const createInboxBatch = async (
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
+};
+
+/**
+ * Check if the local bridge is currently active.
+ */
+export const checkBridgeStatus = async (): Promise<boolean> => {
+  const base = await getApiBase();
+  return base === LOCAL_API_BASE;
 };

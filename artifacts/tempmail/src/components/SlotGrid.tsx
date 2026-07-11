@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Copy, RefreshCw, Zap, Check, Mail, Loader2 } from 'lucide-react';
-import { createInbox, checkInbox, extractVerificationCode } from '../lib/tempmail';
+import { createInbox, checkInbox, extractVerificationCode, checkBridgeStatus } from '../lib/tempmail';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export type Slot = {
@@ -18,10 +18,18 @@ interface SlotGridProps {
 }
 
 export function SlotGrid({ slots, updateSlot }: SlotGridProps) {
+  const [provider, setProvider] = useState<'emailnator' | 'temp-mail.org'>('emailnator');
+
+  useEffect(() => {
+    checkBridgeStatus().then(isLocal => {
+      if (isLocal) setProvider('temp-mail.org');
+    });
+  }, []);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
       {slots.map(slot => (
-        <SlotCard key={slot.id} slot={slot} updateSlot={updateSlot} />
+        <SlotCard key={slot.id} slot={slot} updateSlot={updateSlot} provider={provider} />
       ))}
     </div>
   );
@@ -45,9 +53,11 @@ const POLL_INTERVAL_MS = 3000;
 function SlotCard({
   slot,
   updateSlot,
+  provider,
 }: {
   slot: Slot;
   updateSlot: (id: number, updates: Partial<Slot>) => void;
+  provider: 'emailnator' | 'temp-mail.org';
 }) {
   const [emailCopied, setEmailCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -156,8 +166,12 @@ function SlotCard({
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
           Slot {slot.id}
         </span>
-        <span className="text-[10px] font-mono text-amber-600/60 bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-800/20">
-          emailnator
+        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+          provider === 'temp-mail.org'
+            ? 'text-cyan-400 bg-cyan-950/20 border-cyan-800/20'
+            : 'text-amber-600/60 bg-amber-950/20 border-amber-800/20'
+        }`}>
+          {provider}
         </span>
       </div>
 

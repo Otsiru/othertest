@@ -47,3 +47,8 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local Telegram Bridge files
+local_bridge_config.json
+*.session
+*.session-journal

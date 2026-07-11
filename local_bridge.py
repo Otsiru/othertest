@@ -255,8 +255,26 @@ async def main():
 
     # Start Telegram client
     print("Starting Telegram connection...")
-    await client.start()
-    print("Telegram connected successfully!")
+    try:
+        from telethon.errors import SendCodeUnavailableError, FloodWaitError
+        await client.start()
+        print("Telegram connected successfully!")
+    except SendCodeUnavailableError:
+        print("\n" + "="*60)
+        print("[ERROR] Telegram memblokir/membatasi pengiriman kode saat ini.")
+        print("Hal ini biasanya terjadi karena Anda terlalu sering meminta kode login dalam waktu singkat.")
+        print("\nSOLUSI:")
+        print("1. Pastikan aplikasi Telegram resmi Anda (HP/PC) sedang aktif dan online.")
+        print("2. Tunggu sekitar 5-10 menit agar limit dari Telegram ter-reset.")
+        print("3. Jalankan kembali script ini: python local_bridge.py")
+        print("="*60 + "\n")
+        return
+    except FloodWaitError as e:
+        print(f"\n[ERROR] Anda terkena limit rate (FloodWait). Silakan tunggu {e.seconds} detik sebelum mencoba lagi.\n")
+        return
+    except Exception as e:
+        print(f"\n[ERROR] Gagal menyambungkan ke Telegram: {e}\n")
+        return
 
     # Start HTTP Server thread
     http_thread = threading.Thread(target=run_http_server, daemon=True)

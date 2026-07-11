@@ -85,7 +85,7 @@ async def on_new_message(event):
                 if token not in received_emails:
                     received_emails[token] = []
                 # Avoid duplicates
-                if not any(e['subject'] == subject for e in received_emails[token]):
+                if not any(e['subject'] == subject and e['body'] == text for e in received_emails[token]):
                     received_emails[token].append(mapped_email)
                     print(f"\n[BACKGROUND] Berhasil menangkap email baru untuk token {token[:10]}... | Subjek: {subject}")
             except Exception as e:
@@ -286,10 +286,10 @@ class BridgeHTTPRequestHandler(BaseHTTPRequestHandler):
             api_res = fetch_messages_from_api(token)
             api_emails = api_res.get('emails', []) if isinstance(api_res, dict) else []
             
-            # Merge without duplicates by subject
+            # Merge without duplicates by subject and body
             combined = list(local_emails)
             for api_m in api_emails:
-                if not any(loc_m['subject'] == api_m['subject'] for loc_m in combined):
+                if not any(loc_m['subject'] == api_m['subject'] and loc_m['body'] == api_m['body'] for loc_m in combined):
                     combined.append(api_m)
             
             result = {"emails": combined}

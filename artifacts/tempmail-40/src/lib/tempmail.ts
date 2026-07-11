@@ -71,7 +71,9 @@ export const checkInbox = async (token: string): Promise<Email[] | null> => {
  * Scans subject first, then body/html.
  */
 export const extractVerificationCode = (emails: Email[]): string | null => {
-  for (const email of emails) {
+  // Sort emails by date descending (newest first) to always extract the latest code
+  const sortedEmails = [...emails].sort((a, b) => b.date - a.date);
+  for (const email of sortedEmails) {
     // Check subject first (most common place for short codes)
     const subjectMatch = email.subject?.match(/\b(\d{4,8})\b/);
     if (subjectMatch) return subjectMatch[1];

@@ -4,11 +4,15 @@ import asyncio
 import threading
 from urllib.parse import urlparse, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from telethon import TelegramClient, events
 from curl_cffi import requests
 
 # Config file path
 CONFIG_FILE = 'local_bridge_config.json'
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -38,51 +42,60 @@ API_HASH = config['api_hash']
 # Initialize Telethon
 client = TelegramClient('temp_mail_session', API_ID, API_HASH)
 
-# Event loop reference
+# Event loop and lock references
 loop = None
+generation_lock = None
 
 async def wait_for_new_email():
     """
     Triggers bot to generate new email and returns the email and token.
+    Uses generation_lock to prevent race conditions during concurrent requests.
     """
-    future = loop.create_future()
+    async with generation_lock:
+        future = loop.create_future()
 
-    @client.on(events.NewMessage(chats='tempmail_org_bot'))
-    async def handler(event):
-        text = event.message.text
-        if "New temporary email address generated" in text or "temporary email address generated" in text:
-            # Try to get the link from inline buttons
-            link = None
-            if event.message.buttons:
-                for row in event.message.buttons:
-                    for button in row:
-                        if button.url:
-                            link = button.url
+        @client.on(events.NewMessage(chats='tempmail_org_bot'))
+        async def handler(event):
+            text = event.message.text
+            if "@" in text:
+                # Try to get the link from inline buttons
+                link = None
+                if event.message.buttons:
+                    for row in event.message.buttons:
+                        for button in row:
+                            if button.url:
+                                link = button.url
+                                break
+                
+                # Find the email in text
+                lines = text.split('\n')
+                email = None
+                for line in lines:
+                    if "@" in line:
+                        words = line.split()
+                        for word in words:
+                            if "@" in word:
+                                email = word.strip("[](),. ")
+                                break
+                        if email:
                             break
-            
-            # Find the email in text
-            lines = text.split('\n')
-            email = None
-            for line in lines:
-                if "@" in line:
-                    email = line.strip()
-                    break
-            
-            if email and link:
-                client.remove_event_handler(handler)
-                future.set_result((email, link))
+                
+                if email and link:
+                    client.remove_event_handler(handler)
+                    if not future.done():
+                        future.set_result((email, link))
 
-    # Send command to generate
-    await client.send_message('tempmail_org_bot', '+ Generate New / Delete')
+        # Send command to generate
+        await client.send_message('tempmail_org_bot', '+ Generate New / Delete')
 
-    try:
-        email, link = await asyncio.wait_for(future, timeout=15.0)
-        # Parse JWT token
-        token = link.split('token=')[1].split('&')[0]
-        return {"address": email, "token": token}
-    except Exception as e:
-        client.remove_event_handler(handler)
-        raise e
+        try:
+            email, link = await asyncio.wait_for(future, timeout=20.0)
+            # Parse JWT token
+            token = link.split('token=')[1].split('&')[0]
+            return {"address": email, "token": token}
+        except Exception as e:
+            client.remove_event_handler(handler)
+            raise e
 
 def fetch_messages_from_api(token):
     """
@@ -229,7 +242,7 @@ class BridgeHTTPRequestHandler(BaseHTTPRequestHandler):
             # Run the asynchronous function inside the Telethon loop
             future = asyncio.run_coroutine_threadsafe(wait_for_new_email(), loop)
             try:
-                result = future.result(timeout=15.0)
+                result = future.result(timeout=30.0)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -245,13 +258,14 @@ class BridgeHTTPRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 def run_http_server():
-    server = HTTPServer(('127.0.0.1', 5000), BridgeHTTPRequestHandler)
-    print("=== Local Bridge HTTP Server running on http://localhost:5000 ===")
+    server = ThreadingHTTPServer(('127.0.0.1', 5000), BridgeHTTPRequestHandler)
+    print("=== Local Bridge HTTP Server running on http://127.0.0.1:5000 ===")
     server.serve_forever()
 
 async def main():
-    global loop
+    global loop, generation_lock
     loop = asyncio.get_running_loop()
+    generation_lock = asyncio.Lock()
 
     # Start Telegram client
     print("Starting Telegram connection...")

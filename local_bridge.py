@@ -37,6 +37,7 @@ if 'api_id' not in config or 'api_hash' not in config:
     save_config(config)
 
 API_ID = config['api_id']
+API_HASH = config['api_hash']
 # Global references
 loop = None
 generation_lock = None # Kept for backward compatibility

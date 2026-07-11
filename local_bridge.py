@@ -37,21 +37,18 @@ if 'api_id' not in config or 'api_hash' not in config:
     save_config(config)
 
 API_ID = config['api_id']
-API_HASH = config['api_hash']
-
-# Initialize Telethon
-client = TelegramClient('temp_mail_session', API_ID, API_HASH)
-
-# Event loop and lock references
+# Global references
 loop = None
-generation_lock = None
+generation_lock = None # Kept for backward compatibility
 received_emails = {}  # token -> list of email dicts
+clients = []          # List of active TelegramClients
+client_locks = []     # Locks per client
+current_client_idx = 0
 
-@client.on(events.NewMessage(chats='tempmail_org_bot'))
+# Background listener to capture incoming emails
 async def on_new_message(event):
     text = event.message.text or ""
     if "New email message" in text:
-        # Get the link from inline buttons
         link = None
         if event.message.buttons:
             for row in event.message.buttons:
@@ -95,17 +92,28 @@ async def on_new_message(event):
 
 async def wait_for_new_email():
     """
-    Triggers bot to generate new email and returns the email and token.
-    Uses generation_lock to prevent race conditions during concurrent requests.
+    Triggers bot to generate new email using one of the available Telegram clients in round-robin fashion.
     """
-    async with generation_lock:
+    global current_client_idx
+    if not clients:
+        raise Exception("Tidak ada akun Telegram yang terkoneksi/aktif saat ini.")
+
+    # Select the next client index (round-robin)
+    idx = current_client_idx % len(clients)
+    current_client_idx += 1
+
+    client = clients[idx]
+    lock = client_locks[idx]
+
+    print(f"\nMenggunakan akun Telegram #{idx + 1}/{len(clients)} (Session: {client.session.filename}) untuk membuat email...")
+
+    async with lock:
         future = loop.create_future()
 
         @client.on(events.NewMessage(chats='tempmail_org_bot'))
         async def handler(event):
             text = event.message.text
             if "@" in text:
-                # Try to get the link from inline buttons
                 link = None
                 if event.message.buttons:
                     for row in event.message.buttons:
@@ -136,7 +144,7 @@ async def wait_for_new_email():
         await client.send_message('tempmail_org_bot', '➕ Generate New / Delete')
 
         try:
-            email, link = await asyncio.wait_for(future, timeout=20.0)
+            email, link = await asyncio.wait_for(future, timeout=25.0)
             # Parse JWT token
             token = link.split('token=')[1].split('&')[0]
             return {"address": email, "token": token}
@@ -169,7 +177,6 @@ def fetch_messages_from_api(token):
         r = requests.get('https://web2.temp-mail.org/messages', headers=headers, impersonate="chrome110")
         if r.status_code == 200:
             data = r.json()
-            # If the response is a dict and has 'messages' key, use it
             messages_list = []
             if isinstance(data, dict):
                 messages_list = data.get('messages') or data.get('data') or []
@@ -324,39 +331,84 @@ def run_http_server():
     server.serve_forever()
 
 async def main():
-    global loop, generation_lock
+    global loop, generation_lock, clients, client_locks
     loop = asyncio.get_running_loop()
     generation_lock = asyncio.Lock()
 
-    # Start Telegram client
-    print("Starting Telegram connection...")
-    try:
-        from telethon.errors import SendCodeUnavailableError, FloodWaitError
-        await client.start()
-        print("Telegram connected successfully!")
-    except SendCodeUnavailableError:
+    # Find and sort all session files in sessions/ folder
+    session_paths = []
+    if os.path.exists('sessions'):
+        files = os.listdir('sessions')
+        for f in files:
+            if f.endswith('.session'):
+                session_name = f[:-8]  # remove '.session'
+                session_paths.append(os.path.join('sessions', session_name))
+
+    # Numerical sorting for session_X
+    def get_session_num(path):
+        try:
+            basename = os.path.basename(path)
+            num = basename.split('_')[1]
+            return int(num)
+        except Exception:
+            return 999
+
+    session_paths.sort(key=get_session_num)
+
+    # Legacy fallback if no session files inside sessions/ folder
+    if not session_paths:
+        if os.path.exists('temp_mail_session.session'):
+            session_paths.append('temp_mail_session')
+        else:
+            os.makedirs('sessions', exist_ok=True)
+            session_paths.append('sessions/session_1')
+
+    # Initialize client objects
+    temp_clients = []
+    for path in session_paths:
+        print(f"Menginisialisasi client Telegram untuk session: {path}")
+        c = TelegramClient(path, API_ID, API_HASH)
+        temp_clients.append(c)
+
+    print("\nMenghubungkan ke semua akun Telegram di pool...")
+    active_clients = []
+    active_locks = []
+
+    for idx, client in enumerate(temp_clients):
+        filename = os.path.basename(client.session.filename)
+        print(f"[{idx + 1}/{len(temp_clients)}] Menghubungkan {filename}...")
+        try:
+            await client.start()
+            me = await client.get_me()
+            if me:
+                print(f"  -> Sukses terhubung sebagai: {me.first_name} (ID: {me.id})")
+                client.add_event_handler(on_new_message, events.NewMessage(chats='tempmail_org_bot'))
+                active_clients.append(client)
+                active_locks.append(asyncio.Lock())
+            else:
+                print(f"  -> Gagal: Profile tidak ditemukan.")
+        except Exception as e:
+            print(f"  -> Gagal menghubungkan session {filename}: {e}")
+
+    clients = active_clients
+    client_locks = active_locks
+
+    if not clients:
         print("\n" + "="*60)
-        print("[ERROR] Telegram memblokir/membatasi pengiriman kode saat ini.")
-        print("Hal ini biasanya terjadi karena Anda terlalu sering meminta kode login dalam waktu singkat.")
-        print("\nSOLUSI:")
-        print("1. Pastikan aplikasi Telegram resmi Anda (HP/PC) sedang aktif dan online.")
-        print("2. Tunggu sekitar 5-10 menit agar limit dari Telegram ter-reset.")
-        print("3. Jalankan kembali script ini: python local_bridge.py")
+        print("[CRITICAL ERROR] Tidak ada akun Telegram yang berhasil terhubung!")
+        print("Silakan jalankan script login terlebih dahulu untuk membuat session:")
+        print("python login_accounts.py")
         print("="*60 + "\n")
         return
-    except FloodWaitError as e:
-        print(f"\n[ERROR] Anda terkena limit rate (FloodWait). Silakan tunggu {e.seconds} detik sebelum mencoba lagi.\n")
-        return
-    except Exception as e:
-        print(f"\n[ERROR] Gagal menyambungkan ke Telegram: {e}\n")
-        return
+
+    print(f"\nBerhasil mengaktifkan {len(clients)} akun Telegram di pool!")
 
     # Start HTTP Server thread
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
 
-    # Keep client running
-    await client.run_until_disconnected()
+    # Keep all clients running
+    await asyncio.gather(*(c.run_until_disconnected() for c in clients))
 
 if __name__ == '__main__':
     try:

@@ -86,7 +86,7 @@ async def wait_for_new_email():
                         future.set_result((email, link))
 
         # Send command to generate
-        await client.send_message('tempmail_org_bot', '+ Generate New / Delete')
+        await client.send_message('tempmail_org_bot', '➕ Generate New / Delete')
 
         try:
             email, link = await asyncio.wait_for(future, timeout=20.0)

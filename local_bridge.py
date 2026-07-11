@@ -335,25 +335,36 @@ async def main():
     loop = asyncio.get_running_loop()
     generation_lock = asyncio.Lock()
 
-    # Find and sort all session files in sessions/ folder
+    # Find and sort all session files in external F:\Telegram\1 or local sessions/ folder
     session_paths = []
-    if os.path.exists('sessions'):
-        files = os.listdir('sessions')
+    
+    external_dir = r'F:\Telegram\1'
+    if os.path.exists(external_dir) and os.path.isdir(external_dir):
+        print(f"Mendeteksi folder session eksternal di: {external_dir}")
+        files = os.listdir(external_dir)
         for f in files:
             if f.endswith('.session'):
                 session_name = f[:-8]  # remove '.session'
-                session_paths.append(os.path.join('sessions', session_name))
-
-    # Numerical sorting for session_X
-    def get_session_num(path):
-        try:
-            basename = os.path.basename(path)
-            num = basename.split('_')[1]
-            return int(num)
-        except Exception:
-            return 999
-
-    session_paths.sort(key=get_session_num)
+                session_paths.append(os.path.join(external_dir, session_name))
+        # Alphabetical sort for phone numbers
+        session_paths.sort()
+    else:
+        if os.path.exists('sessions'):
+            files = os.listdir('sessions')
+            for f in files:
+                if f.endswith('.session'):
+                    session_name = f[:-8]  # remove '.session'
+                    session_paths.append(os.path.join('sessions', session_name))
+        
+        # Numerical sorting for session_X
+        def get_session_num(p):
+            try:
+                basename = os.path.basename(p)
+                num = basename.split('_')[1]
+                return int(num)
+            except Exception:
+                return 999
+        session_paths.sort(key=get_session_num)
 
     # Legacy fallback if no session files inside sessions/ folder
     if not session_paths:
@@ -362,6 +373,12 @@ async def main():
         else:
             os.makedirs('sessions', exist_ok=True)
             session_paths.append('sessions/session_1')
+
+    # Limit to maximum of 40 active clients
+    MAX_CLIENTS = 40
+    if len(session_paths) > MAX_CLIENTS:
+        print(f"Menemukan {len(session_paths)} session. Membatasi penggunaan hanya untuk {MAX_CLIENTS} session pertama.")
+        session_paths = session_paths[:MAX_CLIENTS]
 
     # Initialize client objects
     temp_clients = []

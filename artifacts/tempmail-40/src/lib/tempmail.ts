@@ -98,17 +98,18 @@ export const createInboxBatch = async (
   onCreated: (index: number, inbox: InboxResponse) => void,
   delayMs: number = 100,
 ): Promise<void> => {
-  for (let i = 0; i < count; i++) {
+  const promises = Array.from({ length: count }, async (_, i) => {
+    if (delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayMs * i));
+    }
     try {
       const inbox = await createInbox();
       onCreated(i, inbox);
     } catch (err) {
       console.error(`Failed to create inbox ${i + 1}:`, err);
     }
-    if (i < count - 1 && delayMs > 0) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-    }
-  }
+  });
+  await Promise.all(promises);
 };
 
 /**

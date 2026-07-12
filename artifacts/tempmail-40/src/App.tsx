@@ -27,16 +27,36 @@ const TIPS = [
 ];
 
 function Home() {
-  const [slots, setSlots] = useState<Slot[]>(() =>
-    Array.from({ length: 40 }, (_, i) => ({
+  const [slots, setSlots] = useState<Slot[]>(() => {
+    const saved = localStorage.getItem('topnod_tempmail_slots_40');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 40) {
+          // Reset status loading dan generating agar tidak tertahan
+          return parsed.map(s => ({
+            ...s,
+            loadingCode: false,
+            generating: false
+          }));
+        }
+      } catch (e) {
+        console.error('Gagal memuat slots dari localStorage', e);
+      }
+    }
+    return Array.from({ length: 40 }, (_, i) => ({
       id: i + 1,
       email: null,
       token: null,
       code: '',
       loadingCode: false,
       generating: false,
-    }))
-  );
+    }));
+  });
+
+  useEffect(() => {
+    localStorage.setItem('topnod_tempmail_slots_40', JSON.stringify(slots));
+  }, [slots]);
 
   const [tipIndex, setTipIndex] = useState(0);
   const [emailsCopied, setEmailsCopied] = useState(false);

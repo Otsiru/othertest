@@ -26,6 +26,22 @@ const TIPS = [
 
 function Home() {
   const [slots, setSlots] = useState<Slot[]>(() => {
+    const saved = localStorage.getItem('topnod_tempmail_slots_10');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 10) {
+          // Reset status loading dan generating agar tidak tertahan
+          return parsed.map(s => ({
+            ...s,
+            loadingCode: false,
+            generating: false
+          }));
+        }
+      } catch (e) {
+        console.error('Gagal memuat slots dari localStorage', e);
+      }
+    }
     return Array.from({ length: 10 }, (_, i) => ({
       id: i + 1,
       email: null,
@@ -35,6 +51,10 @@ function Home() {
       generating: false,
     }));
   });
+
+  useEffect(() => {
+    localStorage.setItem('topnod_tempmail_slots_10', JSON.stringify(slots));
+  }, [slots]);
 
   const [tipIndex, setTipIndex] = useState(0);
   const [emailsCopied, setEmailsCopied] = useState(false);

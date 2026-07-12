@@ -148,6 +148,8 @@ async def wait_for_new_email():
             email, link = await asyncio.wait_for(future, timeout=25.0)
             # Parse JWT token
             token = link.split('token=')[1].split('&')[0]
+            print(f"  -> [SUCCESS] Email: {email}")
+            print(f"  -> [SUCCESS] Token: {token}")
             return {"address": email, "token": token}
         except Exception as e:
             client.remove_event_handler(handler)
